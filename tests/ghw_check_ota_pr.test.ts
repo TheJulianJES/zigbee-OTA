@@ -966,7 +966,7 @@ Text after end tag`);
             withExtraMetas(IMAGE_V14_2_METAS, {modelId: "model_b"}),
         ]);
         // same file name in prev, must not be updated
-        setManifest(common.PREV_INDEX_MANIFEST_FILENAME, [withExtraMetas(IMAGE_V13_2_METAS, {modelId: "model_c"})]);
+        setManifest(common.PREV_INDEX_MANIFEST_FILENAME, [withExtraMetas(IMAGE_V13_2_METAS, {fileName: IMAGE_V14_2, modelId: "model_c"})]);
         filePaths = [useImage(IMAGE_V14_1)];
         const newContext = withBody(`\`\`\`json [{"fileName": "${IMAGE_V14_2}", "modelId": "model_typo", "minFileVersion": 1}] \`\`\``);
 
@@ -976,7 +976,27 @@ Text after end tag`);
         }).rejects.toThrow(expect.objectContaining({message: expect.stringContaining(`None of the images named '${IMAGE_V14_2}' match`)}));
 
         expectNoChanges(false);
-        expect(prevManifest).toStrictEqual([withExtraMetas(IMAGE_V13_2_METAS, {modelId: "model_c"})]);
+        expect(prevManifest).toStrictEqual([
+            withExtraMetas(IMAGE_V13_2_METAS, {
+                fileName: IMAGE_V14_2,
+                // @ts-expect-error override
+                url: `${common.BASE_REPO_URL}${common.REPO_BRANCH}/${common.PREV_IMAGES_DIR}/${IMAGES_TEST_DIR}/${IMAGE_V14_2}`,
+                modelId: "model_c",
+            }),
+        ]);
+    });
+
+    it("failure updating extra metas of single image with mismatching fileVersion", async () => {
+        setManifest(common.BASE_INDEX_MANIFEST_FILENAME, [structuredClone(IMAGE_V14_2_METAS)]);
+        filePaths = [useImage(IMAGE_V14_1)];
+        const newContext = withBody(`\`\`\`json [{"fileName": "${IMAGE_V14_2}", "fileVersion": 13, "maxFileVersion": 12}] \`\`\``);
+
+        await expect(async () => {
+            // @ts-expect-error mock
+            await checkOtaPR(github, core, newContext);
+        }).rejects.toThrow(expect.objectContaining({message: expect.stringContaining(`None of the images named '${IMAGE_V14_2}' match`)}));
+
+        expectNoChanges(false);
     });
 
     it("failure updating extra metas when image is in both base and prev without fileVersion", async () => {

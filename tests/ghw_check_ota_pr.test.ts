@@ -926,7 +926,7 @@ Text after end tag`);
         await expect(async () => {
             // @ts-expect-error mock
             await checkOtaPR(github, core, newContext);
-        }).rejects.toThrow(expect.objectContaining({message: expect.stringContaining(`Several of the images named '${IMAGE_V14_2}' match`)}));
+        }).rejects.toThrow(expect.objectContaining({message: expect.stringContaining(`Several of the images matching '${IMAGE_V14_2}' match`)}));
 
         expectNoChanges(false);
     });
@@ -973,7 +973,7 @@ Text after end tag`);
         await expect(async () => {
             // @ts-expect-error mock
             await checkOtaPR(github, core, newContext);
-        }).rejects.toThrow(expect.objectContaining({message: expect.stringContaining(`None of the images named '${IMAGE_V14_2}' match`)}));
+        }).rejects.toThrow(expect.objectContaining({message: expect.stringContaining(`None of the images matching '${IMAGE_V14_2}' match`)}));
 
         expectNoChanges(false);
         expect(prevManifest).toStrictEqual([
@@ -994,7 +994,7 @@ Text after end tag`);
         await expect(async () => {
             // @ts-expect-error mock
             await checkOtaPR(github, core, newContext);
-        }).rejects.toThrow(expect.objectContaining({message: expect.stringContaining(`None of the images named '${IMAGE_V14_2}' match`)}));
+        }).rejects.toThrow(expect.objectContaining({message: expect.stringContaining(`None of the images matching '${IMAGE_V14_2}' match`)}));
 
         expectNoChanges(false);
     });
@@ -1008,7 +1008,7 @@ Text after end tag`);
         await expect(async () => {
             // @ts-expect-error mock
             await checkOtaPR(github, core, newContext);
-        }).rejects.toThrow(expect.objectContaining({message: expect.stringContaining(`Several of the images named '${IMAGE_V14_2}' match`)}));
+        }).rejects.toThrow(expect.objectContaining({message: expect.stringContaining(`Several of the images matching '${IMAGE_V14_2}' match`)}));
 
         expectNoChanges(false);
     });
@@ -1070,6 +1070,134 @@ Text after end tag`);
         }).rejects.toThrow(expect.objectContaining({message: expect.stringContaining(`Invalid format for 'fileVersion', expected 'number' type.`)}));
 
         expectNoChanges(false);
+    });
+    it("success updating extra metas of existing image designated with manufacturer directory", async () => {
+        setManifest(common.BASE_INDEX_MANIFEST_FILENAME, [structuredClone(IMAGE_V14_2_METAS)]);
+        filePaths = [useImage(IMAGE_V14_1)];
+        const newContext = withBody(`\`\`\`json [{"fileName": "${IMAGES_TEST_DIR}/${IMAGE_V14_2}", "minFileVersion": 1}] \`\`\``);
+
+        // @ts-expect-error mock
+        await checkOtaPR(github, core, newContext);
+
+        expect(writeManifestSpy).toHaveBeenCalledWith(common.BASE_INDEX_MANIFEST_FILENAME, [
+            withExtraMetas(IMAGE_V14_2_METAS, {minFileVersion: 1}),
+            IMAGE_V14_1_METAS,
+        ]);
+    });
+
+    it("success updating extra metas of image in both base and prev designated with full path", async () => {
+        setManifest(common.BASE_INDEX_MANIFEST_FILENAME, [structuredClone(IMAGE_V14_2_METAS)]);
+        setManifest(common.PREV_INDEX_MANIFEST_FILENAME, [withExtraMetas(IMAGE_V13_2_METAS, {fileName: IMAGE_V14_2})]);
+        filePaths = [useImage(IMAGE_V14_1)];
+        const newContext = withBody(
+            `\`\`\`json [{"fileName": "${common.PREV_IMAGES_DIR}/${IMAGES_TEST_DIR}/${IMAGE_V14_2}", "maxFileVersion": 12}] \`\`\``,
+        );
+
+        // @ts-expect-error mock
+        await checkOtaPR(github, core, newContext);
+
+        expect(writeManifestSpy).toHaveBeenCalledWith(common.BASE_INDEX_MANIFEST_FILENAME, [IMAGE_V14_2_METAS, IMAGE_V14_1_METAS]);
+        expect(writeManifestSpy).toHaveBeenCalledWith(common.PREV_INDEX_MANIFEST_FILENAME, [
+            withExtraMetas(IMAGE_V13_2_METAS, {
+                fileName: IMAGE_V14_2,
+                // @ts-expect-error override
+                url: `${common.BASE_REPO_URL}${common.REPO_BRANCH}/${common.PREV_IMAGES_DIR}/${IMAGES_TEST_DIR}/${IMAGE_V14_2}`,
+                maxFileVersion: 12,
+            }),
+        ]);
+    });
+
+    it("failure updating extra metas when file name exists in several manufacturer directories", async () => {
+        const otherDirImage = withExtraMetas(IMAGE_V14_2_METAS, {
+            // @ts-expect-error override
+            url: `${common.BASE_REPO_URL}${common.REPO_BRANCH}/${common.BASE_IMAGES_DIR}/other-dir/${IMAGE_V14_2}`,
+        });
+        setManifest(common.BASE_INDEX_MANIFEST_FILENAME, [structuredClone(IMAGE_V14_2_METAS), otherDirImage]);
+        filePaths = [useImage(IMAGE_V14_1)];
+        const newContext = withBody(`\`\`\`json [{"fileName": "${IMAGE_V14_2}", "minFileVersion": 1}] \`\`\``);
+
+        await expect(async () => {
+            // @ts-expect-error mock
+            await checkOtaPR(github, core, newContext);
+        }).rejects.toThrow(expect.objectContaining({message: expect.stringContaining(`Several of the images matching '${IMAGE_V14_2}' match`)}));
+
+        expectNoChanges(false);
+    });
+
+    it("success updating extra metas of image in one of several manufacturer directories designated with directory", async () => {
+        const otherDirImage = withExtraMetas(IMAGE_V14_2_METAS, {
+            // @ts-expect-error override
+            url: `${common.BASE_REPO_URL}${common.REPO_BRANCH}/${common.BASE_IMAGES_DIR}/other-dir/${IMAGE_V14_2}`,
+        });
+        setManifest(common.BASE_INDEX_MANIFEST_FILENAME, [structuredClone(IMAGE_V14_2_METAS), otherDirImage]);
+        filePaths = [useImage(IMAGE_V14_1)];
+        const newContext = withBody(`\`\`\`json [{"fileName": "other-dir/${IMAGE_V14_2}", "minFileVersion": 1}] \`\`\``);
+
+        // @ts-expect-error mock
+        await checkOtaPR(github, core, newContext);
+
+        expect(writeManifestSpy).toHaveBeenCalledWith(common.BASE_INDEX_MANIFEST_FILENAME, [
+            IMAGE_V14_2_METAS,
+            withExtraMetas(otherDirImage, {minFileVersion: 1}),
+            IMAGE_V14_1_METAS,
+        ]);
+    });
+
+    it.each([
+        ["manufacturer directory", `${IMAGES_TEST_DIR}/${IMAGE_V14_1}`],
+        ["full path", `${common.BASE_IMAGES_DIR}/${IMAGES_TEST_DIR}/${IMAGE_V14_1}`],
+    ])("success with extra metas for image in PR designated with %s", async (_name, designation) => {
+        filePaths = [useImage(IMAGE_V14_1)];
+        const newContext = withBody(`\`\`\`json [{"fileName": "${designation}", "minFileVersion": 1}] \`\`\``);
+
+        // @ts-expect-error mock
+        await checkOtaPR(github, core, newContext);
+
+        expect(addImageToBaseSpy).toHaveBeenCalledTimes(1);
+        expect(writeManifestSpy).toHaveBeenCalledWith(common.BASE_INDEX_MANIFEST_FILENAME, [withExtraMetas(IMAGE_V14_1_METAS, {minFileVersion: 1})]);
+    });
+
+    it("failure with extra metas for image in PR designated with wrong manufacturer directory", async () => {
+        filePaths = [useImage(IMAGE_V14_1)];
+        const newContext = withBody(`\`\`\`json [{"fileName": "other-dir/${IMAGE_V14_1}", "minFileVersion": 1}] \`\`\``);
+
+        await expect(async () => {
+            // @ts-expect-error mock
+            await checkOtaPR(github, core, newContext);
+        }).rejects.toThrow(expect.objectContaining({message: expect.stringContaining(`[other-dir/${IMAGE_V14_1}] Image not found`)}));
+
+        expectNoChanges(false);
+    });
+
+    it("success with same extra metas entry designating several files in PR", async () => {
+        // a different image (V14_1) under the same file name as V14_2, in another manufacturer directory
+        const otherDir = path.join(common.BASE_IMAGES_DIR, "other-dir");
+        const otherDirFilePath = path.posix.join(otherDir, IMAGE_V14_2);
+
+        rmSync(otherDir, {recursive: true, force: true});
+        mkdirSync(otherDir, {recursive: true});
+        copyFileSync(getImageOriginalDirPath(IMAGE_V14_1), otherDirFilePath);
+
+        filePaths = [{filename: otherDirFilePath}, useImage(IMAGE_V14_2)];
+        const newContext = withBody(`\`\`\`json [{"fileName": "${IMAGE_V14_2}", "minFileVersion": 1}] \`\`\``);
+
+        try {
+            // @ts-expect-error mock
+            await checkOtaPR(github, core, newContext);
+
+            expect(addImageToBaseSpy).toHaveBeenCalledTimes(2);
+            expect(writeManifestSpy).toHaveBeenCalledWith(common.BASE_INDEX_MANIFEST_FILENAME, [
+                withExtraMetas(IMAGE_V14_1_METAS, {
+                    // @ts-expect-error override
+                    fileName: IMAGE_V14_2,
+                    url: `${common.BASE_REPO_URL}${common.REPO_BRANCH}/${common.BASE_IMAGES_DIR}/other-dir/${IMAGE_V14_2}`,
+                    minFileVersion: 1,
+                }),
+                withExtraMetas(IMAGE_V14_2_METAS, {minFileVersion: 1}),
+            ]);
+        } finally {
+            rmSync(otherDir, {recursive: true, force: true});
+        }
     });
 
     it("failure archiving base image over different prev image with same file name", async () => {

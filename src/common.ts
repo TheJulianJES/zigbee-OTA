@@ -164,24 +164,49 @@ export function findMatchImage(
 }
 
 /**
- * Find an existing image by its file name (falls back to the URL's file name for entries from the old system).
+ * Find an existing image by its file name, which can include the manufacturer directory or be the full repository path.
+ * @see isImageFileNameMatch
  *
  * `images` should contain the entries of all manifests to search (an image can be present in both base and prev with the same file name).
  *
- * If several entries share the same file name:
+ * If several entries match the file name:
  * - `fileVersion` (if given) selects the entry with that exact version (e.g. to target the prev image instead of the base image)
  * - `modelId` and `manufacturerName` from `extraMetas` (if given) narrow down to entries matching them (any manufacturer name in common)
  *
- * @returns the matching entry, `undefined` if none has the file name
+ * @returns the matching entry, `undefined` if none matches the file name
  * @throws if the file name matches entries but the narrowing removes all of them or does not result in a single entry
  */
+/**
+ * Get the repository path of an image from its manifest URL (e.g. `images/Manuf/abc.ota`).
+ */
+export function getImageRepoPath(image: RepoImageMeta): string {
+    const repoPrefix = `${BASE_REPO_URL}${REPO_BRANCH}/`;
+
+    if (image.url.startsWith(repoPrefix)) {
+        return decodeURIComponent(image.url.slice(repoPrefix.length));
+    }
+
+    // not a repo URL (should not happen), best effort with the last segments
+    return decodeURIComponent(image.url.split("/").slice(-3).join("/"));
+}
+
+/**
+ * Check if an image at `repoPath` (e.g. `images/Manuf/abc.ota`) is designated by `fileName`, which can be:
+ * - the file name only: `abc.ota`
+ * - prefixed with the manufacturer directory: `Manuf/abc.ota`
+ * - the full repository path: `images/Manuf/abc.ota` (or `images1/Manuf/abc.ota` for a prev image)
+ */
+export function isImageFileNameMatch(fileName: string, repoPath: string): boolean {
+    return repoPath === fileName || repoPath.endsWith(`/${fileName}`);
+}
+
 export function findExistingImage(
     images: RepoImageMeta[],
     fileName: string,
     fileVersion: number | undefined,
     extraMetas: ExtraMetas,
 ): RepoImageMeta | undefined {
-    const nameMatches = images.filter((i) => (i.fileName ?? decodeURIComponent(i.url.split("/").pop()!)) === fileName);
+    const nameMatches = images.filter((i) => isImageFileNameMatch(fileName, getImageRepoPath(i)));
 
     if (nameMatches.length === 0) {
         return undefined;
@@ -207,7 +232,7 @@ export function findExistingImage(
     }
 
     throw new Error(
-        `${matches.length === 0 ? "None" : "Several"} of the images named '${fileName}' match the given 'fileVersion'/'modelId'/'manufacturerName'. Use them to narrow down to a single image:
+        `${matches.length === 0 ? "None" : "Several"} of the images matching '${fileName}' match the given 'fileVersion'/'modelId'/'manufacturerName'. Use them, or the full path as 'fileName' (e.g. \`images1/Manuf/abc.ota\`), to narrow down to a single image:
 \`\`\`json
 ${JSON.stringify(nameMatches, undefined, 2)}
 \`\`\``,

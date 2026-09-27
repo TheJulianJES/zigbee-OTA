@@ -11,6 +11,8 @@ import {
     IMAGE_V13_1,
     IMAGE_V14_1,
     IMAGE_V14_1_METAS,
+    IMAGE_V14_2,
+    IMAGE_V14_2_METAS,
     PREV_IMAGES_TEST_DIR_PATH,
     useImage,
     withExtraMetas,
@@ -189,6 +191,23 @@ describe("Github Workflow: Update manifests", () => {
         expect(writeManifestSpy).toHaveBeenCalledTimes(2);
         expect(writeManifestSpy).toHaveBeenCalledWith(common.BASE_INDEX_MANIFEST_FILENAME, [
             withExtraMetas(IMAGE_V14_1_METAS, {manufacturerName: ["lixee"]}),
+        ]);
+    });
+
+    it("success updating extra metas of existing image not in PR", async () => {
+        setManifest(common.BASE_INDEX_MANIFEST_FILENAME, [IMAGE_V14_2_METAS]);
+        filePaths = [useImage(IMAGE_V14_1)];
+        prBody = `\`\`\`json [{"fileName": "${IMAGE_V14_2}", "minFileVersion": 1}] \`\`\``;
+
+        // @ts-expect-error mock
+        await updateManifests(github, core, context);
+
+        expect(addImageToBaseSpy).toHaveBeenCalledTimes(1);
+        expect(addImageToPrevSpy).toHaveBeenCalledTimes(0);
+        expect(writeManifestSpy).toHaveBeenCalledTimes(2);
+        expect(writeManifestSpy).toHaveBeenCalledWith(common.BASE_INDEX_MANIFEST_FILENAME, [
+            withExtraMetas(IMAGE_V14_2_METAS, {minFileVersion: 1}),
+            IMAGE_V14_1_METAS,
         ]);
     });
 

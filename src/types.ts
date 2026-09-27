@@ -74,5 +74,9 @@ export type ExtraMetas = Omit<
 export type ExtraMetasWithFileName = Omit<
     RepoImageMeta,
     "fileName" | "fileVersion" | "fileSize" | "url" | "imageType" | "manufacturerCode" | "sha512" | "otaHeaderString"
-> & {fileName?: string};
+> & {
+    fileName?: string;
+    /** Only used to select an existing image to update (never written to manifest) */
+    fileVersion?: number;
+};
 export type GHExtraMetas = ExtraMetas | ExtraMetasWithFileName[];

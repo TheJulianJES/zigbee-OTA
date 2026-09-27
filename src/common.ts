@@ -164,42 +164,60 @@ export function findMatchImage(
 }
 
 /**
- * Find an existing image in a manifest by its file name (falls back to the URL's file name for entries from the old system).
+ * Find an existing image by its file name (falls back to the URL's file name for entries from the old system).
  *
- * If several entries share the same file name (e.g. same file declared for multiple `modelId`), the `modelId` and `manufacturerName`
- * from `extraMetas` (if present) are used to narrow down to a single entry.
+ * `images` should contain the entries of all manifests to search (an image can be present in both base and prev with the same file name).
  *
- * @returns the matching entry, `undefined` if none matches
- * @throws if more than one entry matches
+ * If several entries share the same file name:
+ * - `fileVersion` (if given) selects the entry with that exact version (e.g. to target the prev image instead of the base image)
+ * - `modelId` and `manufacturerName` from `extraMetas` (if given) narrow down to entries matching them (any manufacturer name in common)
+ *
+ * @returns the matching entry, `undefined` if none has the file name
+ * @throws if the file name matches several entries but the narrowing removes all of them or does not result in a single entry
  */
-export function findExistingImage(manifest: RepoImageMeta[], fileName: string, extraMetas: ExtraMetas): RepoImageMeta | undefined {
-    let matches = manifest.filter((i) => (i.fileName ?? decodeURIComponent(i.url.split("/").pop()!)) === fileName);
+export function findExistingImage(
+    images: RepoImageMeta[],
+    fileName: string,
+    fileVersion: number | undefined,
+    extraMetas: ExtraMetas,
+): RepoImageMeta | undefined {
+    const nameMatches = images.filter((i) => (i.fileName ?? decodeURIComponent(i.url.split("/").pop()!)) === fileName);
+
+    if (nameMatches.length <= 1) {
+        return nameMatches[0];
+    }
+
+    let matches = nameMatches;
+
+    if (fileVersion !== undefined) {
+        matches = matches.filter((i) => i.fileVersion === fileVersion);
+    }
 
     if (matches.length > 1 && extraMetas.modelId !== undefined) {
         matches = matches.filter((i) => i.modelId === extraMetas.modelId);
     }
 
     if (matches.length > 1 && extraMetas.manufacturerName !== undefined) {
-        matches = matches.filter((i) => i.manufacturerName && primitivesArrayEquals(i.manufacturerName, extraMetas.manufacturerName!));
+        matches = matches.filter((i) => i.manufacturerName?.some((v) => extraMetas.manufacturerName!.includes(v)));
     }
 
-    if (matches.length > 1) {
-        throw new Error(
-            `Multiple images match '${fileName}'. Include the current 'modelId' and/or 'manufacturerName' in the extra metas to narrow it down to a single image:
+    if (matches.length === 1) {
+        return matches[0];
+    }
+
+    throw new Error(
+        `${matches.length === 0 ? "None" : "Several"} of the images named '${fileName}' match the given 'fileVersion'/'modelId'/'manufacturerName'. Use them to narrow down to a single image:
 \`\`\`json
-${JSON.stringify(matches, undefined, 2)}
+${JSON.stringify(nameMatches, undefined, 2)}
 \`\`\``,
-        );
-    }
-
-    return matches[0];
+    );
 }
 
 /**
  * Update the extra metas of an existing image in a manifest (fields not present in `extraMetas` are kept as-is).
  */
 export function updateImageExtraMetas(logPrefix: string, image: RepoImageMeta, extraMetas: ExtraMetas): void {
-    console.log(`${logPrefix} Updating extra metas of existing image: ${JSON.stringify(extraMetas)}.`);
+    console.log(`${logPrefix} Updating extra metas of existing image: ${JSON.stringify(extraMetas)}`);
 
     Object.assign(image, extraMetas);
 }

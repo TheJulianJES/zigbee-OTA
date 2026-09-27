@@ -134,8 +134,10 @@ Example (`myotafile-v2.ota` is added by the pull request, `myotafile-v1.ota` is 
 ````
 
 - Only the fields declared are changed, other fields of the existing image are kept as-is. Removing a field requires a manual edit of the manifest.
-- If the `fileName` does not match any file in the pull request nor any existing image, the validation fails.
-- If several existing images share the same `fileName` (e.g. same image declared for several `modelId`), include the current `modelId` and/or `manufacturerName` of the targeted image to narrow it down. The validation fails if this does not result in exactly one image.
+- If the `fileName` does not match any file in the pull request nor any existing image (in `index.json` or `index1.json`), the validation fails.
+- If several existing images share the same `fileName`, the validation fails unless the following narrows it down to exactly one image:
+  - `"fileVersion": number` selects the image with that exact version (e.g. to target the image in `index1.json` when `index.json` has a newer one with the same name). It is only used for selection, never written to the manifest.
+  - `modelId` and `manufacturerName` (e.g. same image declared for several `modelId`) select the images currently matching them (any manufacturer name in common). Note that these are also written to the selected image, like any other field.
 - The pull request must still contain at least one file in `images/**` for the automation to run. For metadata-only changes, edit the manifest directly instead (see notes for maintainers below).
 
 ### Notes for maintainers & developers

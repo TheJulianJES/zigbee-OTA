@@ -195,7 +195,7 @@ describe("Github Workflow: Update manifests", () => {
     });
 
     it("success updating extra metas of existing image not in PR", async () => {
-        setManifest(common.BASE_INDEX_MANIFEST_FILENAME, [IMAGE_V14_2_METAS]);
+        setManifest(common.BASE_INDEX_MANIFEST_FILENAME, [structuredClone(IMAGE_V14_2_METAS)]);
         filePaths = [useImage(IMAGE_V14_1)];
         prBody = `\`\`\`json [{"fileName": "${IMAGE_V14_2}", "minFileVersion": 1}] \`\`\``;
 
@@ -209,6 +209,19 @@ describe("Github Workflow: Update manifests", () => {
             withExtraMetas(IMAGE_V14_2_METAS, {minFileVersion: 1}),
             IMAGE_V14_1_METAS,
         ]);
+    });
+
+    it("failure updating extra metas of unknown image", async () => {
+        setManifest(common.BASE_INDEX_MANIFEST_FILENAME, [structuredClone(IMAGE_V14_2_METAS)]);
+        filePaths = [useImage(IMAGE_V14_1)];
+        prBody = `\`\`\`json [{"fileName": "does-not-exist.ota", "minFileVersion": 1}] \`\`\``;
+
+        await expect(async () => {
+            // @ts-expect-error mock
+            await updateManifests(github, core, context);
+        }).rejects.toThrow(expect.objectContaining({message: expect.stringContaining("[does-not-exist.ota] Image not found")}));
+
+        expectNoChanges(false);
     });
 
     it("fails to get PR for extra metas", async () => {

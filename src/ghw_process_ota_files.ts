@@ -35,6 +35,8 @@ function getFileExtraMetas(extraMetas: GHExtraMetas, fileName: string): ExtraMet
         const fileExtraMetas = extraMetas.find((m) => m.fileName === fileName) ?? {};
         /** @see getValidMetas */
         delete fileExtraMetas.fileName;
+        // only a selector for existing images, must not be written to manifest
+        delete fileExtraMetas.fileVersion;
 
         return fileExtraMetas;
     }
@@ -102,7 +104,17 @@ async function parsePRBodyExtraMetas(github: Octokit, core: typeof CoreApi, cont
                             continue;
                         }
 
-                        extraMetas.push(getValidMetas(meta, false));
+                        const validMetas = getValidMetas(meta, false);
+
+                        if (meta.fileVersion != null) {
+                            if (typeof meta.fileVersion !== "number") {
+                                throw new Error(`Invalid format for 'fileVersion', expected 'number' type.`);
+                            }
+
+                            validMetas.fileVersion = meta.fileVersion;
+                        }
+
+                        extraMetas.push(validMetas);
                     }
                 } else {
                     extraMetas = getValidMetas(metas, false);
@@ -122,7 +134,7 @@ async function parsePRBodyExtraMetas(github: Octokit, core: typeof CoreApi, cont
  * Apply extra metas declared in the PR body for images that are not part of the changed files (existing images in the manifests).
  *
  * Fields not present in the declared extra metas are kept as-is (merge, not replace).
- * Images are looked up in the base manifest first, then in the prev manifest.
+ * Images are looked up in both base and prev manifests (`fileVersion` can be used to select between the two).
  */
 function updateExistingImagesExtraMetas(
     core: typeof CoreApi,
@@ -140,24 +152,18 @@ function updateExistingImagesExtraMetas(
             const extraMetas = getValidMetas(updateMeta, true);
 
             if (Object.keys(extraMetas).length === 0) {
-                throw new Error("No valid extra metas to update for existing image.");
+                throw new Error("No valid extra metas to update for existing image");
             }
 
-            let image = findExistingImage(baseManifest, fileName, extraMetas);
-            let manifestName = BASE_INDEX_MANIFEST_FILENAME;
-
-            if (!image) {
-                image = findExistingImage(prevManifest, fileName, extraMetas);
-                manifestName = PREV_INDEX_MANIFEST_FILENAME;
-            }
+            const image = findExistingImage([...baseManifest, ...prevManifest], fileName, updateMeta.fileVersion, extraMetas);
 
             if (!image) {
                 throw new Error(
-                    "Image not found in changed files nor in existing manifests. Check the `fileName` matches the exact file name of the image.",
+                    "Image not found in changed files nor in existing manifests. Check `fileName` matches the exact file name of the image",
                 );
             }
 
-            core.info(`${logPrefix} Found in ${manifestName}.`);
+            core.info(`${logPrefix} Found in ${baseManifest.includes(image) ? BASE_INDEX_MANIFEST_FILENAME : PREV_INDEX_MANIFEST_FILENAME}.`);
 
             updateImageExtraMetas(logPrefix, image, extraMetas);
         } catch (error) {

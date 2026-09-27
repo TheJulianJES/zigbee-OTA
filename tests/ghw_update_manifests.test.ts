@@ -121,6 +121,7 @@ describe("Github Workflow: Update manifests", () => {
         resetManifests();
 
         filePaths = [];
+        prBody = undefined;
         readManifestSpy = vi.spyOn(common, "readManifest").mockImplementation(getManifest);
         writeManifestSpy = vi.spyOn(common, "writeManifest").mockImplementation(setManifest);
         addImageToBaseSpy = vi.spyOn(common, "addImageToBase");

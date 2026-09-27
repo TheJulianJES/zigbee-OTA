@@ -173,7 +173,7 @@ export function findMatchImage(
  * - `modelId` and `manufacturerName` from `extraMetas` (if given) narrow down to entries matching them (any manufacturer name in common)
  *
  * @returns the matching entry, `undefined` if none has the file name
- * @throws if the file name matches several entries but the narrowing removes all of them or does not result in a single entry
+ * @throws if the file name matches entries but the narrowing removes all of them or does not result in a single entry
  */
 export function findExistingImage(
     images: RepoImageMeta[],
@@ -183,12 +183,13 @@ export function findExistingImage(
 ): RepoImageMeta | undefined {
     const nameMatches = images.filter((i) => (i.fileName ?? decodeURIComponent(i.url.split("/").pop()!)) === fileName);
 
-    if (nameMatches.length <= 1) {
-        return nameMatches[0];
+    if (nameMatches.length === 0) {
+        return undefined;
     }
 
     let matches = nameMatches;
 
+    // always applied (even on a single match) since it identifies a specific image
     if (fileVersion !== undefined) {
         matches = matches.filter((i) => i.fileVersion === fileVersion);
     }

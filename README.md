@@ -78,7 +78,7 @@ Any field not in this list will be ignored. Any field not matching the required 
 
 ###### To place restrictions
 
-- "force": boolean _(ignore `fileVersion` and always present as 'available')_
+- "force": boolean _(ignore the device's current firmware version and always present as 'available')_
 - "hardwareVersionMax": number
 - "hardwareVersionMin": number
 - "manufacturerName": array of strings _(target only devices with one of these manufacturer names)_
@@ -90,6 +90,11 @@ Any field not in this list will be ignored. Any field not matching the required 
 
 - "originalUrl": string
 - "releaseNotes": string
+
+###### To designate images (array form only)
+
+- "fileName": string _(see below)_
+- "fileVersion": number _(only to select an existing image to update, see below; never written to the manifest)_
 
 If the pull request contains multiple files, the metadata is added for all files. If some files require different metadata, add the matching `fileName` to the JSON using an encompassing array instead. It will be used to assign metadata as directed.
 

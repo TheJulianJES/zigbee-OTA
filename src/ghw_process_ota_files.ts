@@ -7,16 +7,20 @@ import {
     addImageToBase,
     addImageToPrev,
     BASE_IMAGES_DIR,
+    BASE_INDEX_MANIFEST_FILENAME,
+    findExistingImage,
     findMatchImage,
     getOutDir,
     getParsedImageStatus,
     getValidMetas,
     ParsedImageStatus,
     PREV_IMAGES_DIR,
+    PREV_INDEX_MANIFEST_FILENAME,
     parseImageHeader,
     UPGRADE_FILE_IDENTIFIER,
+    updateImageExtraMetas,
 } from "./common.js";
-import type {Context, ExtraMetas, GHExtraMetas, RepoImageMeta} from "./types.js";
+import type {Context, ExtraMetas, ExtraMetasWithFileName, GHExtraMetas, RepoImageMeta} from "./types.js";
 
 const GLEDOPTO_MANUFACTURER_CODE = 4687;
 const TUYA_MANUFACTURER_CODE_1 = 4098;
@@ -114,6 +118,57 @@ async function parsePRBodyExtraMetas(github: Octokit, core: typeof CoreApi, cont
     return extraMetas;
 }
 
+/**
+ * Apply extra metas declared in the PR body for images that are not part of the changed files (existing images in the manifests).
+ *
+ * Fields not present in the declared extra metas are kept as-is (merge, not replace).
+ * Images are looked up in the base manifest first, then in the prev manifest.
+ */
+function updateExistingImagesExtraMetas(
+    core: typeof CoreApi,
+    updateMetas: ExtraMetasWithFileName[],
+    baseManifest: RepoImageMeta[],
+    prevManifest: RepoImageMeta[],
+): void {
+    for (const updateMeta of updateMetas) {
+        const fileName = updateMeta.fileName!;
+        const logPrefix = `[${fileName}]`;
+
+        core.startGroup(fileName);
+
+        try {
+            const extraMetas = getValidMetas(updateMeta, true);
+
+            if (Object.keys(extraMetas).length === 0) {
+                throw new Error("No valid extra metas to update for existing image.");
+            }
+
+            let image = findExistingImage(baseManifest, fileName, extraMetas);
+            let manifestName = BASE_INDEX_MANIFEST_FILENAME;
+
+            if (!image) {
+                image = findExistingImage(prevManifest, fileName, extraMetas);
+                manifestName = PREV_INDEX_MANIFEST_FILENAME;
+            }
+
+            if (!image) {
+                throw new Error(
+                    "Image not found in changed files nor in existing manifests. Check the `fileName` matches the exact file name of the image.",
+                );
+            }
+
+            core.info(`${logPrefix} Found in ${manifestName}.`);
+
+            updateImageExtraMetas(logPrefix, image, extraMetas);
+        } catch (error) {
+            core.endGroup();
+            throw new Error(`${logPrefix} ${(error as Error).message}`);
+        }
+
+        core.endGroup();
+    }
+}
+
 export async function processOtaFiles(
     github: Octokit,
     core: typeof CoreApi,
@@ -123,6 +178,12 @@ export async function processOtaFiles(
     prevManifest: RepoImageMeta[],
 ): Promise<void> {
     const extraMetas = await parsePRBodyExtraMetas(github, core, context);
+    const changedFileNames = new Set(filePaths.map((filePath) => path.basename(filePath)));
+    // extra metas declared for files not in the PR target existing images in the manifests
+    const updateMetas = Array.isArray(extraMetas) ? extraMetas.filter((m) => !changedFileNames.has(m.fileName!)) : [];
+
+    // applied before processing the changed files, so the changed files are matched against the up-to-date metas
+    updateExistingImagesExtraMetas(core, updateMetas, baseManifest, prevManifest);
 
     for (const filePath of filePaths) {
         core.startGroup(filePath);

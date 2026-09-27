@@ -163,6 +163,47 @@ export function findMatchImage(
     return [imageIndex, imageIndex === -1 ? undefined : imageList[imageIndex]];
 }
 
+/**
+ * Find an existing image in a manifest by its file name (falls back to the URL's file name for entries from the old system).
+ *
+ * If several entries share the same file name (e.g. same file declared for multiple `modelId`), the `modelId` and `manufacturerName`
+ * from `extraMetas` (if present) are used to narrow down to a single entry.
+ *
+ * @returns the matching entry, `undefined` if none matches
+ * @throws if more than one entry matches
+ */
+export function findExistingImage(manifest: RepoImageMeta[], fileName: string, extraMetas: ExtraMetas): RepoImageMeta | undefined {
+    let matches = manifest.filter((i) => (i.fileName ?? decodeURIComponent(i.url.split("/").pop()!)) === fileName);
+
+    if (matches.length > 1 && extraMetas.modelId !== undefined) {
+        matches = matches.filter((i) => i.modelId === extraMetas.modelId);
+    }
+
+    if (matches.length > 1 && extraMetas.manufacturerName !== undefined) {
+        matches = matches.filter((i) => i.manufacturerName && primitivesArrayEquals(i.manufacturerName, extraMetas.manufacturerName!));
+    }
+
+    if (matches.length > 1) {
+        throw new Error(
+            `Multiple images match '${fileName}'. Include the current 'modelId' and/or 'manufacturerName' in the extra metas to narrow it down to a single image:
+\`\`\`json
+${JSON.stringify(matches, undefined, 2)}
+\`\`\``,
+        );
+    }
+
+    return matches[0];
+}
+
+/**
+ * Update the extra metas of an existing image in a manifest (fields not present in `extraMetas` are kept as-is).
+ */
+export function updateImageExtraMetas(logPrefix: string, image: RepoImageMeta, extraMetas: ExtraMetas): void {
+    console.log(`${logPrefix} Updating extra metas of existing image: ${JSON.stringify(extraMetas)}.`);
+
+    Object.assign(image, extraMetas);
+}
+
 export function changeRepoUrl(repoUrl: string, fromDir: string, toDir: string): string {
     return repoUrl.replace(path.posix.join(REPO_BRANCH, fromDir), path.posix.join(REPO_BRANCH, toDir));
 }

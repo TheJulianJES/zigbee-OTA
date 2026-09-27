@@ -19,6 +19,8 @@ import {
     IMAGE_V13_1,
     IMAGE_V13_1_METAS,
     IMAGE_V13_1_METAS_MAIN,
+    IMAGE_V13_2,
+    IMAGE_V13_2_METAS,
     IMAGE_V14_1,
     IMAGE_V14_1_METAS,
     IMAGE_V14_2,
@@ -799,6 +801,165 @@ Text after end tag`);
             }).rejects.toThrow(expect.objectContaining({message: expect.stringContaining(error)}));
         }
     });
+    it("success updating extra metas of existing image not in PR", async () => {
+        setManifest(common.BASE_INDEX_MANIFEST_FILENAME, [IMAGE_V14_2_METAS]);
+        filePaths = [useImage(IMAGE_V14_1)];
+        const newContext = withBody(`\`\`\`json [{"fileName": "${IMAGE_V14_2}", "minFileVersion": 1, "releaseNotes": "Updated notes"}] \`\`\``);
+
+        // @ts-expect-error mock
+        await checkOtaPR(github, core, newContext);
+
+        expect(addImageToBaseSpy).toHaveBeenCalledTimes(1);
+        expect(addImageToPrevSpy).toHaveBeenCalledTimes(0);
+        expect(writeManifestSpy).toHaveBeenCalledTimes(2);
+        expect(writeManifestSpy).toHaveBeenCalledWith(common.BASE_INDEX_MANIFEST_FILENAME, [
+            withExtraMetas(IMAGE_V14_2_METAS, {minFileVersion: 1, releaseNotes: "Updated notes"}),
+            IMAGE_V14_1_METAS,
+        ]);
+        expect(writeManifestSpy).toHaveBeenCalledWith(common.PREV_INDEX_MANIFEST_FILENAME, []);
+    });
+
+    it("success updating extra metas of existing image in prev manifest", async () => {
+        setManifest(common.BASE_INDEX_MANIFEST_FILENAME, [IMAGE_V14_2_METAS]);
+        setManifest(common.PREV_INDEX_MANIFEST_FILENAME, [IMAGE_V13_2_METAS]);
+        filePaths = [useImage(IMAGE_V14_1)];
+        const newContext = withBody(`\`\`\`json [{"fileName": "${IMAGE_V13_2}", "maxFileVersion": 12}] \`\`\``);
+
+        // @ts-expect-error mock
+        await checkOtaPR(github, core, newContext);
+
+        expect(addImageToBaseSpy).toHaveBeenCalledTimes(1);
+        expect(addImageToPrevSpy).toHaveBeenCalledTimes(0);
+        expect(writeManifestSpy).toHaveBeenCalledTimes(2);
+        expect(writeManifestSpy).toHaveBeenCalledWith(common.BASE_INDEX_MANIFEST_FILENAME, [IMAGE_V14_2_METAS, IMAGE_V14_1_METAS]);
+        expect(writeManifestSpy).toHaveBeenCalledWith(common.PREV_INDEX_MANIFEST_FILENAME, [withExtraMetas(IMAGE_V13_2_METAS, {maxFileVersion: 12})]);
+    });
+
+    it("success updating extra metas keeps existing extra metas not declared", async () => {
+        setManifest(common.BASE_INDEX_MANIFEST_FILENAME, [
+            withExtraMetas(IMAGE_V14_2_METAS, {originalUrl: "https://example.com/original.ota", modelId: "model_a", minFileVersion: 1}),
+        ]);
+        filePaths = [useImage(IMAGE_V14_1)];
+        const newContext = withBody(`\`\`\`json [{"fileName": "${IMAGE_V14_2}", "minFileVersion": 2, "maxFileVersion": 13}] \`\`\``);
+
+        // @ts-expect-error mock
+        await checkOtaPR(github, core, newContext);
+
+        expect(writeManifestSpy).toHaveBeenCalledWith(common.BASE_INDEX_MANIFEST_FILENAME, [
+            withExtraMetas(IMAGE_V14_2_METAS, {
+                originalUrl: "https://example.com/original.ota",
+                modelId: "model_a",
+                minFileVersion: 2,
+                maxFileVersion: 13,
+            }),
+            IMAGE_V14_1_METAS,
+        ]);
+    });
+
+    it("success with new image chained to existing image via updated extra metas", async () => {
+        // existing v13 in base, PR adds v14 requiring v13 (min) and restricts v13 to devices below v13 (max)
+        setManifest(common.BASE_INDEX_MANIFEST_FILENAME, [IMAGE_V13_1_METAS_MAIN]);
+        filePaths = [useImage(IMAGE_V14_1)];
+        const newContext = withBody(
+            `\`\`\`json [{"fileName": "${IMAGE_V14_1}", "minFileVersion": 13}, {"fileName": "${IMAGE_V13_1}", "maxFileVersion": 12}] \`\`\``,
+        );
+
+        // @ts-expect-error mock
+        await checkOtaPR(github, core, newContext);
+
+        expect(addImageToBaseSpy).toHaveBeenCalledTimes(1);
+        expect(addImageToPrevSpy).toHaveBeenCalledTimes(0);
+        expect(writeManifestSpy).toHaveBeenCalledTimes(2);
+        expect(writeManifestSpy).toHaveBeenCalledWith(common.BASE_INDEX_MANIFEST_FILENAME, [
+            withExtraMetas(IMAGE_V13_1_METAS_MAIN, {maxFileVersion: 12}),
+            withExtraMetas(IMAGE_V14_1_METAS, {minFileVersion: 13}),
+        ]);
+        expect(writeManifestSpy).toHaveBeenCalledWith(common.PREV_INDEX_MANIFEST_FILENAME, []);
+    });
+
+    it("success updating extra metas narrowed down by modelId when several images share a file name", async () => {
+        setManifest(common.BASE_INDEX_MANIFEST_FILENAME, [
+            withExtraMetas(IMAGE_V14_2_METAS, {modelId: "model_a"}),
+            withExtraMetas(IMAGE_V14_2_METAS, {modelId: "model_b"}),
+        ]);
+        filePaths = [useImage(IMAGE_V14_1)];
+        const newContext = withBody(`\`\`\`json [{"fileName": "${IMAGE_V14_2}", "modelId": "model_b", "minFileVersion": 1}] \`\`\``);
+
+        // @ts-expect-error mock
+        await checkOtaPR(github, core, newContext);
+
+        expect(writeManifestSpy).toHaveBeenCalledWith(common.BASE_INDEX_MANIFEST_FILENAME, [
+            withExtraMetas(IMAGE_V14_2_METAS, {modelId: "model_a"}),
+            withExtraMetas(IMAGE_V14_2_METAS, {modelId: "model_b", minFileVersion: 1}),
+            IMAGE_V14_1_METAS,
+        ]);
+    });
+
+    it("success updating extra metas narrowed down by manufacturerName when several images share a file name", async () => {
+        setManifest(common.BASE_INDEX_MANIFEST_FILENAME, [
+            withExtraMetas(IMAGE_V14_2_METAS, {manufacturerName: ["manuf_a"]}),
+            withExtraMetas(IMAGE_V14_2_METAS, {manufacturerName: ["manuf_b", "manuf_c"]}),
+        ]);
+        filePaths = [useImage(IMAGE_V14_1)];
+        const newContext = withBody(
+            `\`\`\`json [{"fileName": "${IMAGE_V14_2}", "manufacturerName": ["manuf_b", "manuf_c"], "minFileVersion": 1}] \`\`\``,
+        );
+
+        // @ts-expect-error mock
+        await checkOtaPR(github, core, newContext);
+
+        expect(writeManifestSpy).toHaveBeenCalledWith(common.BASE_INDEX_MANIFEST_FILENAME, [
+            withExtraMetas(IMAGE_V14_2_METAS, {manufacturerName: ["manuf_a"]}),
+            withExtraMetas(IMAGE_V14_2_METAS, {manufacturerName: ["manuf_b", "manuf_c"], minFileVersion: 1}),
+            IMAGE_V14_1_METAS,
+        ]);
+    });
+
+    it("failure updating extra metas when several images share a file name", async () => {
+        setManifest(common.BASE_INDEX_MANIFEST_FILENAME, [
+            withExtraMetas(IMAGE_V14_2_METAS, {modelId: "model_a"}),
+            withExtraMetas(IMAGE_V14_2_METAS, {modelId: "model_b"}),
+        ]);
+        filePaths = [useImage(IMAGE_V14_1)];
+        const newContext = withBody(`\`\`\`json [{"fileName": "${IMAGE_V14_2}", "minFileVersion": 1}] \`\`\``);
+
+        await expect(async () => {
+            // @ts-expect-error mock
+            await checkOtaPR(github, core, newContext);
+        }).rejects.toThrow(expect.objectContaining({message: expect.stringContaining(`Multiple images match '${IMAGE_V14_2}'`)}));
+
+        expectNoChanges(false);
+    });
+
+    it("failure updating extra metas of unknown image", async () => {
+        setManifest(common.BASE_INDEX_MANIFEST_FILENAME, [IMAGE_V14_2_METAS]);
+        filePaths = [useImage(IMAGE_V14_1)];
+        const newContext = withBody(`\`\`\`json [{"fileName": "does-not-exist.ota", "minFileVersion": 1}] \`\`\``);
+
+        await expect(async () => {
+            // @ts-expect-error mock
+            await checkOtaPR(github, core, newContext);
+        }).rejects.toThrow(
+            expect.objectContaining({
+                message: expect.stringContaining("[does-not-exist.ota] Image not found in changed files nor in existing manifests"),
+            }),
+        );
+
+        expectNoChanges(false);
+    });
+
+    it("failure updating extra metas of existing image without valid extra metas", async () => {
+        setManifest(common.BASE_INDEX_MANIFEST_FILENAME, [IMAGE_V14_2_METAS]);
+        filePaths = [useImage(IMAGE_V14_1)];
+        const newContext = withBody(`\`\`\`json [{"fileName": "${IMAGE_V14_2}", "unknownField": 1}] \`\`\``);
+
+        await expect(async () => {
+            // @ts-expect-error mock
+            await checkOtaPR(github, core, newContext);
+        }).rejects.toThrow(expect.objectContaining({message: expect.stringContaining("No valid extra metas to update for existing image")}));
+
+        expectNoChanges(false);
+    });
 
     it("failure archiving base image over different prev image with same file name", async () => {
         // base v13 and prev v12 share the same file name, prev v12 is restricted so it does not match base v13
@@ -882,6 +1043,7 @@ Text after end tag`);
             withExtraMetas(IMAGE_V13_1_METAS, {modelId: "model_b"}),
         ]);
     });
+
     it.each([["modified"], ["renamed"], ["removed"]])("failure with existing image %s in PR", async (status) => {
         setManifest(common.BASE_INDEX_MANIFEST_FILENAME, [structuredClone(IMAGE_V13_1_METAS_MAIN)]);
         filePaths = [

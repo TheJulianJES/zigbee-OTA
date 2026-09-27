@@ -112,6 +112,32 @@ Example:
 ```
 ````
 
+#### Updating metadata of existing images
+
+Entries in the array whose `fileName` does not match a file in the pull request are used to update the metadata of images already present in the manifests (`index.json` first, then `index1.json`). This is useful when a new image requires changes to an existing image, e.g. to set `maxFileVersion` on the previous version when the new one has `minFileVersion` (multi-step upgrade).
+
+Example (`myotafile-v2.ota` is added by the pull request, `myotafile-v1.ota` is already in `index.json`):
+
+````md
+```json
+[
+    {
+        "fileName": "myotafile-v2.ota",
+        "minFileVersion": 2
+    },
+    {
+        "fileName": "myotafile-v1.ota",
+        "maxFileVersion": 1
+    }
+]
+```
+````
+
+- Only the fields declared are changed, other fields of the existing image are kept as-is. Removing a field requires a manual edit of the manifest.
+- If the `fileName` does not match any file in the pull request nor any existing image, the validation fails.
+- If several existing images share the same `fileName` (e.g. same image declared for several `modelId`), include the current `modelId` and/or `manufacturerName` of the targeted image to narrow it down. The validation fails if this does not result in exactly one image.
+- The pull request must still contain at least one file in `images/**` for the automation to run. For metadata-only changes, edit the manifest directly instead (see notes for maintainers below).
+
 ### Notes for maintainers & developers
 
 - `images` and `index.json` contain added (PR or auto download) "upgrade" images.

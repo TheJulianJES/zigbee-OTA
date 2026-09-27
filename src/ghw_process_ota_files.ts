@@ -13,6 +13,7 @@ import {
     getOutDir,
     getParsedImageStatus,
     getValidMetas,
+    isImageFileNameMatch,
     ParsedImageStatus,
     PREV_IMAGES_DIR,
     PREV_INDEX_MANIFEST_FILENAME,
@@ -30,13 +31,20 @@ const LUMI_UNITED_TECHOLOGY_LTD_SHENZHEN = 4447;
 const EXTRA_METAS_PR_BODY_START_TAG = "```json";
 const EXTRA_METAS_PR_BODY_END_TAG = "```";
 
-function getFileExtraMetas(extraMetas: GHExtraMetas, fileName: string): ExtraMetas {
+/**
+ * Get the extra metas for a changed file (`filePath` as `images/Manuf/abc.ota`).
+ * In array form, the first entry designating the file is used (the same entry can designate several files).
+ * @see isImageFileNameMatch
+ */
+function getFileExtraMetas(extraMetas: GHExtraMetas, filePath: string): ExtraMetas {
     if (Array.isArray(extraMetas)) {
-        const fileExtraMetas = extraMetas.find((m) => m.fileName === fileName) ?? {};
-        /** @see getValidMetas */
-        delete fileExtraMetas.fileName;
-        // only a selector for existing images, must not be written to manifest
-        delete fileExtraMetas.fileVersion;
+        // `fileName` is only a designation and `fileVersion` only a selector for existing images, neither must be written to manifest
+        // @see getValidMetas
+        const {
+            fileName: _fileName,
+            fileVersion: _fileVersion,
+            ...fileExtraMetas
+        } = extraMetas.find((m) => isImageFileNameMatch(m.fileName!, filePath)) ?? {};
 
         return fileExtraMetas;
     }
@@ -184,9 +192,10 @@ export async function processOtaFiles(
     prevManifest: RepoImageMeta[],
 ): Promise<void> {
     const extraMetas = await parsePRBodyExtraMetas(github, core, context);
-    const changedFileNames = new Set(filePaths.map((filePath) => path.basename(filePath)));
     // extra metas declared for files not in the PR target existing images in the manifests
-    const updateMetas = Array.isArray(extraMetas) ? extraMetas.filter((m) => !changedFileNames.has(m.fileName!)) : [];
+    const updateMetas = Array.isArray(extraMetas)
+        ? extraMetas.filter((m) => !filePaths.some((filePath) => isImageFileNameMatch(m.fileName!, filePath)))
+        : [];
 
     // applied before processing the changed files, so the changed files are matched against the up-to-date metas
     updateExistingImagesExtraMetas(core, updateMetas, baseManifest, prevManifest);
@@ -211,7 +220,7 @@ export async function processOtaFiles(
             core.info(`${logPrefix} Parsed image header:`);
             core.info(JSON.stringify(parsedImage, undefined, 2));
 
-            const fileExtraMetas = getFileExtraMetas(extraMetas, firmwareFileName);
+            const fileExtraMetas = getFileExtraMetas(extraMetas, filePath);
 
             core.info(`${logPrefix} Extra metas:`);
             core.info(JSON.stringify(fileExtraMetas, undefined, 2));

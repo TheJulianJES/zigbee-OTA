@@ -33,18 +33,23 @@ const EXTRA_METAS_PR_BODY_END_TAG = "```";
 
 /**
  * Get the extra metas for a changed file (`filePath` as `images/Manuf/abc.ota`).
- * In array form, the first entry designating the file is used (the same entry can designate several files).
+ * In array form, the entry designating the file is used (the same entry can designate several files).
  * @see isImageFileNameMatch
+ * @throws if several entries designate the file
  */
 function getFileExtraMetas(extraMetas: GHExtraMetas, filePath: string): ExtraMetas {
     if (Array.isArray(extraMetas)) {
+        const matches = extraMetas.filter((m) => isImageFileNameMatch(m.fileName!, filePath));
+
+        if (matches.length > 1) {
+            throw new Error(
+                `Several extra metas entries designate this file (${matches.map((m) => `'${m.fileName}'`).join(", ")}), expected only one`,
+            );
+        }
+
         // `fileName` is only a designation and `fileVersion` only a selector for existing images, neither must be written to manifest
         // @see getValidMetas
-        const {
-            fileName: _fileName,
-            fileVersion: _fileVersion,
-            ...fileExtraMetas
-        } = extraMetas.find((m) => isImageFileNameMatch(m.fileName!, filePath)) ?? {};
+        const {fileName: _fileName, fileVersion: _fileVersion, ...fileExtraMetas} = matches[0] ?? {};
 
         return fileExtraMetas;
     }

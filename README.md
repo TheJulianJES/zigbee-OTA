@@ -93,7 +93,7 @@ Any field not in this list will be ignored. Any field not matching the required 
 
 If the pull request contains multiple files, the metadata is added for all files. If some files require different metadata, add the matching `fileName` to the JSON using an encompassing array instead. It will be used to assign metadata as directed.
 
-`fileName` can be the file name only (`myotafile.ota`), prefixed with the manufacturer directory (`xyzManufacturer/myotafile.ota`), or the full repository path (`images/xyzManufacturer/myotafile.ota`). An entry designates every file it matches.
+`fileName` can be the file name only (`myotafile.ota`), prefixed with the manufacturer directory (`xyzManufacturer/myotafile.ota`), or the full repository path (`images/xyzManufacturer/myotafile.ota`, always `images/` for files in the pull request, even if they end up archived in `images1/`). An entry designates every file it matches, and a file must not be designated by more than one entry. An entry matching a file in the pull request is never used to update existing images (see below).
 
 Example:
 

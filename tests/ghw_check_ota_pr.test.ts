@@ -1199,4 +1199,17 @@ Text after end tag`);
             rmSync(otherDir, {recursive: true, force: true});
         }
     });
+    it("failure with several extra metas entries designating same file in PR", async () => {
+        filePaths = [useImage(IMAGE_V14_1)];
+        const newContext = withBody(
+            `\`\`\`json [{"fileName": "${IMAGE_V14_1}", "modelId": "model_a"}, {"fileName": "${IMAGES_TEST_DIR}/${IMAGE_V14_1}", "minFileVersion": 1}] \`\`\``,
+        );
+
+        await expect(async () => {
+            // @ts-expect-error mock
+            await checkOtaPR(github, core, newContext);
+        }).rejects.toThrow(expect.objectContaining({message: expect.stringContaining("Several extra metas entries designate this file")}));
+
+        expectNoChanges(false);
+    });
 });

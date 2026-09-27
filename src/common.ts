@@ -164,30 +164,20 @@ export function findMatchImage(
 }
 
 /**
- * Find an existing image by its file name, which can include the manufacturer directory or be the full repository path.
- * @see isImageFileNameMatch
- *
- * `images` should contain the entries of all manifests to search (an image can be present in both base and prev with the same file name).
- *
- * If several entries match the file name:
- * - `fileVersion` (if given) selects the entry with that exact version (e.g. to target the prev image instead of the base image)
- * - `modelId` and `manufacturerName` from `extraMetas` (if given) narrow down to entries matching them (any manufacturer name in common)
- *
- * @returns the matching entry, `undefined` if none matches the file name
- * @throws if the file name matches entries but the narrowing removes all of them or does not result in a single entry
- */
-/**
  * Get the repository path of an image from its manifest URL (e.g. `images/Manuf/abc.ota`).
  */
 export function getImageRepoPath(image: RepoImageMeta): string {
     const repoPrefix = `${BASE_REPO_URL}${REPO_BRANCH}/`;
 
-    if (image.url.startsWith(repoPrefix)) {
-        return decodeURIComponent(image.url.slice(repoPrefix.length));
-    }
-
     // not a repo URL (should not happen), best effort with the last segments
-    return decodeURIComponent(image.url.split("/").slice(-3).join("/"));
+    const encodedPath = image.url.startsWith(repoPrefix) ? image.url.slice(repoPrefix.length) : image.url.split("/").slice(-3).join("/");
+
+    try {
+        return decodeURIComponent(encodedPath);
+    } catch {
+        // malformed encoding in a manifest entry must not break processing of other images
+        return encodedPath;
+    }
 }
 
 /**
@@ -200,6 +190,19 @@ export function isImageFileNameMatch(fileName: string, repoPath: string): boolea
     return repoPath === fileName || repoPath.endsWith(`/${fileName}`);
 }
 
+/**
+ * Find an existing image by its file name, which can include the manufacturer directory or be the full repository path.
+ * @see isImageFileNameMatch
+ *
+ * `images` should contain the entries of all manifests to search (an image can be present in both base and prev with the same file name).
+ *
+ * If several entries match the file name:
+ * - `fileVersion` (if given) selects the entry with that exact version (e.g. to target the prev image instead of the base image)
+ * - `modelId` and `manufacturerName` from `extraMetas` (if given) narrow down to entries matching them (any manufacturer name in common)
+ *
+ * @returns the matching entry, `undefined` if none matches the file name
+ * @throws if the file name matches entries but the narrowing removes all of them or does not result in a single entry
+ */
 export function findExistingImage(
     images: RepoImageMeta[],
     fileName: string,

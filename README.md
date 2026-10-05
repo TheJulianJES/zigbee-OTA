@@ -94,7 +94,6 @@ Any field not in this list will be ignored. Any field not matching the required 
 ###### To designate images (array form only)
 
 - "fileName": string _(see below)_
-- "fileVersion": number _(only to select an existing image to update, see below; never written to the manifest)_
 
 If the pull request contains multiple files, the metadata is added for all files. If some files require different metadata, add the matching `fileName` to the JSON using an encompassing array instead. It will be used to assign metadata as directed.
 
@@ -144,7 +143,6 @@ Example (`myotafile-v2.ota` is added by the pull request, `myotafile-v1.ota` is 
 - If the `fileName` does not match any file in the pull request nor any existing image (in `index.json` or `index1.json`), the validation fails.
 - If several existing images match the `fileName` (e.g. same file name in several manufacturer directories, or in both `index.json` and `index1.json`), the validation fails unless the following narrows it down to exactly one image:
   - the manufacturer directory or the full repository path in `fileName` (e.g. `images1/xyzManufacturer/myotafile.ota` to target the image in `index1.json`).
-  - `"fileVersion": number` selects the image with that exact version. It is only used for selection, never written to the manifest.
   - `modelId` and `manufacturerName` (e.g. same image declared for several `modelId`) select the images currently matching them (any manufacturer name in common). Note that these are also written to the selected image, like any other field.
 - The pull request must still contain at least one file in `images/**` for the automation to run. For metadata-only changes, edit the manifest directly instead (see notes for maintainers below).
 

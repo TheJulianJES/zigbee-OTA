@@ -164,20 +164,10 @@ export function findMatchImage(
 }
 
 /**
- * Get the repository path of an image from its manifest URL (e.g. `images/Manuf/abc.ota`).
+ * Get the repository path of an image from its manifest URL (e.g. `images/Manuf/abc.ota`), i.e. its last three segments.
  */
 export function getImageRepoPath(image: RepoImageMeta): string {
-    const repoPrefix = `${BASE_REPO_URL}${REPO_BRANCH}/`;
-
-    // not a repo URL (should not happen), best effort with the last segments
-    const encodedPath = image.url.startsWith(repoPrefix) ? image.url.slice(repoPrefix.length) : image.url.split("/").slice(-3).join("/");
-
-    try {
-        return decodeURIComponent(encodedPath);
-    } catch {
-        // malformed encoding in a manifest entry must not break processing of other images
-        return encodedPath;
-    }
+    return decodeURIComponent(image.url.split("/").slice(-3).join("/"));
 }
 
 /**
@@ -196,33 +186,22 @@ export function isImageFileNameMatch(fileName: string, repoPath: string): boolea
  *
  * `images` should contain the entries of all manifests to search (an image can be present in both base and prev with the same file name).
  *
- * If several entries match the file name:
- * - `fileVersion` (if given) selects the entry with that exact version (e.g. to target the prev image instead of the base image)
- * - `modelId` and `manufacturerName` from `extraMetas` (if given) narrow down to entries matching them (any manufacturer name in common)
+ * If several entries match the file name (e.g. same file declared for several `modelId`), `modelId` and `manufacturerName` from `extraMetas`
+ * (if given) narrow down to entries matching them (any manufacturer name in common).
  *
  * @returns the matching entry, `undefined` if none matches the file name
- * @throws if the file name matches entries but the narrowing removes all of them or does not result in a single entry
+ * @throws if the file name matches several entries and the narrowing does not result in a single entry
  */
-export function findExistingImage(
-    images: RepoImageMeta[],
-    fileName: string,
-    fileVersion: number | undefined,
-    extraMetas: ExtraMetas,
-): RepoImageMeta | undefined {
+export function findExistingImage(images: RepoImageMeta[], fileName: string, extraMetas: ExtraMetas): RepoImageMeta | undefined {
     const nameMatches = images.filter((i) => isImageFileNameMatch(fileName, getImageRepoPath(i)));
 
-    if (nameMatches.length === 0) {
-        return undefined;
+    if (nameMatches.length <= 1) {
+        return nameMatches[0];
     }
 
     let matches = nameMatches;
 
-    // always applied (even on a single match) since it identifies a specific image
-    if (fileVersion !== undefined) {
-        matches = matches.filter((i) => i.fileVersion === fileVersion);
-    }
-
-    if (matches.length > 1 && extraMetas.modelId !== undefined) {
+    if (extraMetas.modelId !== undefined) {
         matches = matches.filter((i) => i.modelId === extraMetas.modelId);
     }
 
@@ -235,20 +214,11 @@ export function findExistingImage(
     }
 
     throw new Error(
-        `${matches.length === 0 ? "None" : "Several"} of the images matching '${fileName}' match the given 'fileVersion'/'modelId'/'manufacturerName'. Use them, or the full path as 'fileName' (e.g. \`images1/Manuf/abc.ota\`), to narrow down to a single image:
+        `${matches.length === 0 ? "None" : "Several"} of the images matching '${fileName}' match the given 'modelId'/'manufacturerName'. Use them, or the full path as 'fileName' (e.g. \`images1/Manuf/abc.ota\`), to narrow down to a single image:
 \`\`\`json
 ${JSON.stringify(nameMatches, undefined, 2)}
 \`\`\``,
     );
-}
-
-/**
- * Update the extra metas of an existing image in a manifest (fields not present in `extraMetas` are kept as-is).
- */
-export function updateImageExtraMetas(logPrefix: string, image: RepoImageMeta, extraMetas: ExtraMetas): void {
-    console.log(`${logPrefix} Updating extra metas of existing image: ${JSON.stringify(extraMetas)}`);
-
-    Object.assign(image, extraMetas);
 }
 
 export function changeRepoUrl(repoUrl: string, fromDir: string, toDir: string): string {

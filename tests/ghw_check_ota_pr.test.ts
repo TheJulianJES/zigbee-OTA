@@ -986,20 +986,7 @@ Text after end tag`);
         ]);
     });
 
-    it("failure updating extra metas of single image with mismatching fileVersion", async () => {
-        setManifest(common.BASE_INDEX_MANIFEST_FILENAME, [structuredClone(IMAGE_V14_2_METAS)]);
-        filePaths = [useImage(IMAGE_V14_1)];
-        const newContext = withBody(`\`\`\`json [{"fileName": "${IMAGE_V14_2}", "fileVersion": 13, "maxFileVersion": 12}] \`\`\``);
-
-        await expect(async () => {
-            // @ts-expect-error mock
-            await checkOtaPR(github, core, newContext);
-        }).rejects.toThrow(expect.objectContaining({message: expect.stringContaining(`None of the images matching '${IMAGE_V14_2}' match`)}));
-
-        expectNoChanges(false);
-    });
-
-    it("failure updating extra metas when image is in both base and prev without fileVersion", async () => {
+    it("failure updating extra metas when image is in both base and prev without full path", async () => {
         setManifest(common.BASE_INDEX_MANIFEST_FILENAME, [structuredClone(IMAGE_V14_2_METAS)]);
         setManifest(common.PREV_INDEX_MANIFEST_FILENAME, [withExtraMetas(IMAGE_V13_2_METAS, {fileName: IMAGE_V14_2})]);
         filePaths = [useImage(IMAGE_V14_1)];
@@ -1011,26 +998,6 @@ Text after end tag`);
         }).rejects.toThrow(expect.objectContaining({message: expect.stringContaining(`Several of the images matching '${IMAGE_V14_2}' match`)}));
 
         expectNoChanges(false);
-    });
-
-    it("success updating extra metas of image in both base and prev selected by fileVersion", async () => {
-        setManifest(common.BASE_INDEX_MANIFEST_FILENAME, [structuredClone(IMAGE_V14_2_METAS)]);
-        setManifest(common.PREV_INDEX_MANIFEST_FILENAME, [withExtraMetas(IMAGE_V13_2_METAS, {fileName: IMAGE_V14_2})]);
-        filePaths = [useImage(IMAGE_V14_1)];
-        const newContext = withBody(`\`\`\`json [{"fileName": "${IMAGE_V14_2}", "fileVersion": 13, "maxFileVersion": 12}] \`\`\``);
-
-        // @ts-expect-error mock
-        await checkOtaPR(github, core, newContext);
-
-        expect(writeManifestSpy).toHaveBeenCalledWith(common.BASE_INDEX_MANIFEST_FILENAME, [IMAGE_V14_2_METAS, IMAGE_V14_1_METAS]);
-        expect(writeManifestSpy).toHaveBeenCalledWith(common.PREV_INDEX_MANIFEST_FILENAME, [
-            withExtraMetas(IMAGE_V13_2_METAS, {
-                fileName: IMAGE_V14_2,
-                // @ts-expect-error override
-                url: `${common.BASE_REPO_URL}${common.REPO_BRANCH}/${common.PREV_IMAGES_DIR}/${IMAGES_TEST_DIR}/${IMAGE_V14_2}`,
-                maxFileVersion: 12,
-            }),
-        ]);
     });
 
     it("success updating extra metas of existing image then archived by newer image in PR", async () => {
@@ -1050,27 +1017,6 @@ Text after end tag`);
         ]);
     });
 
-    it("success ignoring fileVersion for image in PR", async () => {
-        filePaths = [useImage(IMAGE_V14_1)];
-        const newContext = withBody(`\`\`\`json [{"fileName": "${IMAGE_V14_1}", "fileVersion": 999, "minFileVersion": 1}] \`\`\``);
-
-        // @ts-expect-error mock
-        await checkOtaPR(github, core, newContext);
-
-        expect(writeManifestSpy).toHaveBeenCalledWith(common.BASE_INDEX_MANIFEST_FILENAME, [withExtraMetas(IMAGE_V14_1_METAS, {minFileVersion: 1})]);
-    });
-
-    it("failure with invalid fileVersion", async () => {
-        filePaths = [useImage(IMAGE_V14_1)];
-        const newContext = withBody(`\`\`\`json [{"fileName": "${IMAGE_V14_1}", "fileVersion": "14"}] \`\`\``);
-
-        await expect(async () => {
-            // @ts-expect-error mock
-            await checkOtaPR(github, core, newContext);
-        }).rejects.toThrow(expect.objectContaining({message: expect.stringContaining(`Invalid format for 'fileVersion', expected 'number' type.`)}));
-
-        expectNoChanges(false);
-    });
     it("success updating extra metas of existing image designated with manufacturer directory", async () => {
         setManifest(common.BASE_INDEX_MANIFEST_FILENAME, [structuredClone(IMAGE_V14_2_METAS)]);
         filePaths = [useImage(IMAGE_V14_1)];

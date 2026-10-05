@@ -7,7 +7,6 @@ import {
     addImageToBase,
     addImageToPrev,
     BASE_IMAGES_DIR,
-    BASE_INDEX_MANIFEST_FILENAME,
     findExistingImage,
     findMatchImage,
     getOutDir,
@@ -16,10 +15,8 @@ import {
     isImageFileNameMatch,
     ParsedImageStatus,
     PREV_IMAGES_DIR,
-    PREV_INDEX_MANIFEST_FILENAME,
     parseImageHeader,
     UPGRADE_FILE_IDENTIFIER,
-    updateImageExtraMetas,
 } from "./common.js";
 import type {Context, ExtraMetas, ExtraMetasWithFileName, GHExtraMetas, RepoImageMeta} from "./types.js";
 
@@ -47,9 +44,9 @@ function getFileExtraMetas(extraMetas: GHExtraMetas, filePath: string): ExtraMet
             );
         }
 
-        // `fileName` is only a designation and `fileVersion` only a selector for existing images, neither must be written to manifest
+        // `fileName` is only a designation, must not be written to manifest
         // @see getValidMetas
-        const {fileName: _fileName, fileVersion: _fileVersion, ...fileExtraMetas} = matches[0] ?? {};
+        const {fileName: _fileName, ...fileExtraMetas} = matches[0] ?? {};
 
         return fileExtraMetas;
     }
@@ -117,17 +114,7 @@ async function parsePRBodyExtraMetas(github: Octokit, core: typeof CoreApi, cont
                             continue;
                         }
 
-                        const validMetas = getValidMetas(meta, false);
-
-                        if (meta.fileVersion != null) {
-                            if (typeof meta.fileVersion !== "number") {
-                                throw new Error(`Invalid format for 'fileVersion', expected 'number' type.`);
-                            }
-
-                            validMetas.fileVersion = meta.fileVersion;
-                        }
-
-                        extraMetas.push(validMetas);
+                        extraMetas.push(getValidMetas(meta, false));
                     }
                 } else {
                     extraMetas = getValidMetas(metas, false);
@@ -147,7 +134,7 @@ async function parsePRBodyExtraMetas(github: Octokit, core: typeof CoreApi, cont
  * Apply extra metas declared in the PR body for images that are not part of the changed files (existing images in the manifests).
  *
  * Fields not present in the declared extra metas are kept as-is (merge, not replace).
- * Images are looked up in both base and prev manifests (`fileVersion` can be used to select between the two).
+ * Images are looked up in both base and prev manifests (the full path in `fileName` can be used to select between the two).
  */
 function updateExistingImagesExtraMetas(
     core: typeof CoreApi,
@@ -168,7 +155,7 @@ function updateExistingImagesExtraMetas(
                 throw new Error("No valid extra metas to update for existing image");
             }
 
-            const image = findExistingImage([...baseManifest, ...prevManifest], fileName, updateMeta.fileVersion, extraMetas);
+            const image = findExistingImage([...baseManifest, ...prevManifest], fileName, extraMetas);
 
             if (!image) {
                 throw new Error(
@@ -176,9 +163,9 @@ function updateExistingImagesExtraMetas(
                 );
             }
 
-            core.info(`${logPrefix} Found in ${baseManifest.includes(image) ? BASE_INDEX_MANIFEST_FILENAME : PREV_INDEX_MANIFEST_FILENAME}.`);
+            core.info(`${logPrefix} Updating extra metas of existing image: ${JSON.stringify(extraMetas)}`);
 
-            updateImageExtraMetas(logPrefix, image, extraMetas);
+            Object.assign(image, extraMetas);
         } catch (error) {
             core.endGroup();
             throw new Error(`${logPrefix} ${(error as Error).message}`);

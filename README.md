@@ -144,6 +144,7 @@ Example (`myotafile-v2.ota` is added by the pull request, `myotafile-v1.ota` is 
 - If several existing images match the `fileName` (e.g. same file name in several manufacturer directories, or in both `index.json` and `index1.json`), the validation fails unless the following narrows it down to exactly one image:
   - the manufacturer directory or the full repository path in `fileName` (e.g. `images1/xyzManufacturer/myotafile.ota` to target the image in `index1.json`).
   - `modelId` and `manufacturerName` (e.g. same image declared for several `modelId`) select the images currently matching them (any manufacturer name in common). Note that these are also written to the selected image, like any other field.
+- Restricting an image in `index1.json` (e.g. `maxFileVersion`) so that it no longer matches the image with the same file name in `index.json` prevents the latter from being archived later (its file would overwrite the restricted one). The validation fails in that case.
 - The pull request must still contain at least one file in `images/**` for the automation to run. For metadata-only changes, edit the manifest directly instead (see notes for maintainers below).
 
 ### Notes for maintainers & developers

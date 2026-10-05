@@ -1159,6 +1159,38 @@ Text after end tag`);
         expectNoChanges(false);
     });
 
+    it("failure archiving base image over prev image with same file name made non-matching by update", async () => {
+        // base v13 and prev v12 share the same file name (initially both without restrictions, so they match each other)
+        const prevSameName = withExtraMetas(IMAGE_V12_1_METAS, {
+            // @ts-expect-error override
+            fileName: IMAGE_V13_1,
+            url: `${common.BASE_REPO_URL}${common.REPO_BRANCH}/${common.PREV_IMAGES_DIR}/${IMAGES_TEST_DIR}/${IMAGE_V13_1}`,
+        });
+        setManifest(common.BASE_INDEX_MANIFEST_FILENAME, [structuredClone(IMAGE_V13_1_METAS_MAIN)]);
+        setManifest(common.PREV_INDEX_MANIFEST_FILENAME, [structuredClone(prevSameName)]);
+        useImage(IMAGE_V13_1);
+        mkdirSync(PREV_IMAGES_TEST_DIR_PATH, {recursive: true});
+        copyFileSync(getImageOriginalDirPath(IMAGE_V12_1), path.join(PREV_IMAGES_TEST_DIR_PATH, IMAGE_V13_1));
+        // PR adds v14 (archives base v13 to prev) and restricts the prev v12 image, which makes it no longer match base v13
+        filePaths = [useImage(IMAGE_V14_1)];
+        const newContext = withBody(
+            `\`\`\`json [{"fileName": "${common.PREV_IMAGES_DIR}/${IMAGES_TEST_DIR}/${IMAGE_V13_1}", "maxFileVersion": 11}] \`\`\``,
+        );
+
+        await expect(async () => {
+            // @ts-expect-error mock
+            await checkOtaPR(github, core, newContext);
+        }).rejects.toThrow(
+            expect.objectContaining({
+                message: expect.stringContaining(`Prev manifest already has a different image with file name '${IMAGE_V13_1}'`),
+            }),
+        );
+
+        expect(writeManifestSpy).toHaveBeenCalledTimes(0);
+        // prev v12 binary must not have been overwritten by base v13
+        expect(common.computeSHA512(readFileSync(path.join(PREV_IMAGES_TEST_DIR_PATH, IMAGE_V13_1)))).toStrictEqual(IMAGE_V12_1_METAS.sha512);
+    });
+
     it("failure archiving base image over different prev image with same file name", async () => {
         // base v13 and prev v12 share the same file name, prev v12 is restricted so it does not match base v13
         const prevSameName = withExtraMetas(IMAGE_V12_1_METAS, {
